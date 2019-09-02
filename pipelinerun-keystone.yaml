@@ -1,0 +1,19 @@
+apiVersion: tekton.dev/v1alpha1
+kind: PipelineRun
+metadata:
+  generateName: keystone-upgrade-
+spec:
+  pipelineRef:
+    name: upgrade-keystone-pipeline
+  params:
+    - name: keystoneImagesUrl
+      value: "docker-dev-virtual.docker.mirantis.net/mirantis/oscore/oh/keystone"
+    - name: keystoneImagesTag
+      value: "stein-bionic-20190828170014"
+    - name: heatImagesUrl
+      value: "docker-dev-virtual.docker.mirantis.net/mirantis/oscore/oh/heat"
+    - name: heatImagesTag
+      value: "stein-bionic-20190828170014"
+#  trigger:
+#    type: manual
+  serviceAccount: tekton-pipelines

@@ -1,0 +1,62 @@
+apiVersion: tekton.dev/v1alpha1
+kind: Pipeline
+metadata:
+  name: upgrade-keystone-pipeline
+spec:
+  params:
+    - name: keystoneImagesUrl
+      description: Url of image repository
+    - name: keystoneImagesTag
+      description: Tag of the images to be used.
+    - name: heatImagesUrl
+      description: Url of image repository
+    - name: heatImagesTag
+      description: Tag of the images to be used.
+  tasks:
+  - name: keystone-doctor-db-sync
+    taskRef: 
+      name: keystone-doctor-db-sync
+    params:
+      - name: keystoneImagesUrl
+        value: "${params.keystoneImagesUrl}"
+      - name: keystoneImagesTag
+        value: "${params.keystoneImagesTag}"
+  - name: delete-keystone-jobs
+    taskRef: 
+      name: delete-keystone-jobs
+    runAfter:
+      - keystone-doctor-db-sync
+  - name: change-keystone-jobs-images
+    taskRef:
+      name: change-keystone-jobs-images
+    runAfter:
+      - delete-keystone-jobs
+    params:
+      - name: keystoneImagesUrl
+        value: "${params.keystoneImagesUrl}"
+      - name: keystoneImagesTag
+        value: "${params.keystoneImagesTag}"
+      - name: heatImagesUrl
+        value: "${params.heatImagesUrl}"
+      - name: heatImagesTag
+        value: "${params.heatImagesTag}"
+  - name: change-keystone-api-images
+    taskRef:
+      name: change-keystone-api-images
+    runAfter:
+      - change-keystone-jobs-images
+    params:
+      - name: keystoneImagesUrl
+        value: "${params.keystoneImagesUrl}"
+      - name: keystoneImagesTag
+        value: "${params.keystoneImagesTag}"
+  - name: keystone-db-sync-contract
+    taskRef:
+      name: keystone-db-sync-contract
+    runAfter:
+      - change-keystone-api-images
+    params:
+      - name: keystoneImagesUrl
+        value: "${params.keystoneImagesUrl}"
+      - name: keystoneImagesTag
+        value: "${params.keystoneImagesTag}"

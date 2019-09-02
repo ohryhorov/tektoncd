@@ -1,0 +1,220 @@
+apiVersion: tekton.dev/v1alpha1
+kind: Task
+metadata:
+  name: keystone-doctor-db-sync
+spec:
+  inputs:
+    params:
+      - name: keystoneImagesUrl
+        description: Url of image repository
+      - name: keystoneImagesTag
+        description: Tag of the images to be used.
+        default: "nightly"
+  steps:
+    - name: keystone-manage-doctor
+      image: ${inputs.params.keystoneImagesUrl}:${inputs.params.keystoneImagesTag}
+      command:
+        - keystone-manage
+      args:
+        - "doctor"
+      volumeMounts:
+        - name: etckeystone
+          mountPath: /etc/keystone
+        - name: keystone-etc
+          mountPath: /etc/keystone/keystone.conf
+          subPath: keystone.conf
+          readOnly: true
+        - name: keystone-fernet-keys
+          mountPath: /etc/keystone/fernet-keys/
+        - name: keystone-credential-keys
+          mountPath: /etc/keystone/credential-keys/
+        - name: keystone-etc
+          mountPath: /etc/keystone/logging.conf
+          subPath: logging.conf
+          readOnly: true 
+        - name: etckeystonedomains
+          mountPath: "/etc/keystonedomains"
+    - name: keystone-db-sync
+      image: docker-dev-virtual.docker.mirantis.net/mirantis/oscore/oh/keystone:stein-bionic-20190828170014
+      command:
+        - keystone-manage
+      args:
+        - "db_sync"
+        - "--expand"
+      volumeMounts:
+        - name: etckeystone
+          mountPath: /etc/keystone
+        - name: keystone-etc
+          mountPath: /etc/keystone/keystone.conf
+          subPath: keystone.conf
+          readOnly: true
+        - name: keystone-fernet-keys
+          mountPath: /etc/keystone/fernet-keys/
+        - name: keystone-credential-keys
+          mountPath: /etc/keystone/credential-keys/
+        - name: keystone-etc
+          mountPath: /etc/keystone/logging.conf
+          subPath: logging.conf
+          readOnly: true 
+        - name: etckeystonedomains
+          mountPath: "/etc/keystonedomains"
+    - name: keystone-db-sync-migrate
+      image: docker-dev-virtual.docker.mirantis.net/mirantis/oscore/oh/keystone:stein-bionic-20190828170014
+      command:
+        - keystone-manage
+      args:
+        - "db_sync"
+        - "--migrate"
+      volumeMounts:
+        - name: etckeystone
+          mountPath: /etc/keystone
+        - name: keystone-etc
+          mountPath: /etc/keystone/keystone.conf
+          subPath: keystone.conf
+          readOnly: true
+        - name: keystone-fernet-keys
+          mountPath: /etc/keystone/fernet-keys/
+        - name: keystone-credential-keys
+          mountPath: /etc/keystone/credential-keys/
+        - name: keystone-etc
+          mountPath: /etc/keystone/logging.conf
+          subPath: logging.conf
+          readOnly: true 
+        - name: etckeystonedomains
+          mountPath: "/etc/keystonedomains"
+  volumes:
+    - name: etckeystone
+      emptyDir: {}
+    - name: keystone-etc
+      secret:
+        secretName: keystone-etc
+        defaultMode: 0444
+    - name: keystone-fernet-keys
+      secret:
+        secretName: keystone-fernet-keys
+    - name: keystone-credential-keys
+      secret:
+        secretName: keystone-credential-keys
+    - name: etckeystonedomains
+      emptyDir: {}          
+---
+apiVersion: tekton.dev/v1alpha1
+kind: Task
+metadata:
+  name: keystone-db-sync-contract
+spec:
+  inputs:
+    params:
+      - name: keystoneImagesUrl
+        description: Url of image repository
+      - name: keystoneImagesTag
+        description: Tag of the images to be used.
+        default: "nightly"
+  steps:
+    - name: keystone-manage-db-sync-contract
+      image: ${inputs.params.keystoneImagesUrl}:${inputs.params.keystoneImagesTag}
+      command:
+        - keystone-manage
+      args:
+        - "db_sync"
+        - "--contract"
+      volumeMounts:
+        - name: etckeystone
+          mountPath: /etc/keystone
+        - name: keystone-etc
+          mountPath: /etc/keystone/keystone.conf
+          subPath: keystone.conf
+          readOnly: true
+        - name: keystone-fernet-keys
+          mountPath: /etc/keystone/fernet-keys/
+        - name: keystone-credential-keys
+          mountPath: /etc/keystone/credential-keys/
+        - name: keystone-etc
+          mountPath: /etc/keystone/logging.conf
+          subPath: logging.conf
+          readOnly: true 
+        - name: etckeystonedomains
+          mountPath: "/etc/keystonedomains"
+  volumes:
+    - name: etckeystone
+      emptyDir: {}
+    - name: keystone-etc
+      secret:
+        secretName: keystone-etc
+        defaultMode: 0444
+    - name: keystone-fernet-keys
+      secret:
+        secretName: keystone-fernet-keys
+    - name: keystone-credential-keys
+      secret:
+        secretName: keystone-credential-keys
+    - name: etckeystonedomains
+      emptyDir: {}          
+---
+#apiVersion: tekton.dev/v1alpha1
+#kind: TaskRun
+#metadata:
+#  name: keystone-doctor-task-run
+#spec:
+#  taskRef:
+#    name: keystone-doctor
+---
+apiVersion: tekton.dev/v1alpha1
+kind: Task
+metadata:
+  name: delete-keystone-jobs
+spec:
+  steps:
+    - name: delete-jobs
+      image: lachlanevenson/k8s-kubectl
+      command: ["kubectl"]
+      args:
+        - "delete"
+        - "jobs"
+        - "-l"
+        - "application=keystone"
+---
+apiVersion: tekton.dev/v1alpha1
+kind: Task
+metadata:
+  name: change-keystone-jobs-images
+spec:
+  inputs:
+    params:
+      - name: keystoneImagesUrl
+        description: Url of image repository
+      - name: keystoneImagesTag
+        description: Tag of the images to be used.
+        default: "nightly"
+      - name: heatImagesUrl
+        description: Url of image repository
+      - name: heatImagesTag
+        description: Tag of the images to be used.
+        default: "nightly"
+  steps:
+    - name: change-images
+      image: lachlanevenson/k8s-kubectl
+      command: ["/bin/sh"]
+      args:
+        - -c
+        - "kubectl patch openstackdeployments -n openstack osh-dev --type=json -p='[{\"op\": \"replace\", \"path\": \"/spec/services/identity/keystone/values\", \"value\": {\"images\": {\"tags\": {\"bootstrap\": \"${inputs.params.heatImagesUrl}:${inputs.params.heatImagesTag}\", \"db_init\": \"${inputs.params.heatImagesUrl}:${inputs.params.heatImagesTag}\", \"keystone_db_sync\": \"${inputs.params.keystoneImagesUrl}:${inputs.params.keystoneImagesTag}\", \"db_drop\": \"${inputs.params.heatImagesUrl}:${inputs.params.heatImagesTag}\", \"ks_user\": \"${inputs.params.heatImagesUrl}:${inputs.params.heatImagesTag}\", \"keystone_fernet_setup\": \"${inputs.params.keystoneImagesUrl}:${inputs.params.keystoneImagesTag}\", \"keystone_fernet_rotate\": \"${inputs.params.keystoneImagesUrl}:${inputs.params.keystoneImagesTag}\", \"keystone_credential_setup\": \"${inputs.params.keystoneImagesUrl}:${inputs.params.keystoneImagesTag}\", \"keystone_credential_rotate\": \"${inputs.params.keystoneImagesUrl}:${inputs.params.keystoneImagesTag}\", \"keystone_credential_cleanup\": \"${inputs.params.heatImagesUrl}:${inputs.params.heatImagesTag}\", \"keystone_domain_manage\": \"${inputs.params.keystoneImagesUrl}:${inputs.params.keystoneImagesTag}\", \"keystone_federations_create\": \"${inputs.params.heatImagesUrl}:${inputs.params.heatImagesTag}\"}}}}]'"
+---
+apiVersion: tekton.dev/v1alpha1
+kind: Task
+metadata:
+  name: change-keystone-api-images
+spec:
+  inputs:
+    params:
+      - name: keystoneImagesUrl
+        description: Url of image repository
+      - name: keystoneImagesTag
+        description: Tag of the images to be used.
+        default: "nightly"
+  steps:
+    - name: change-images
+      image: lachlanevenson/k8s-kubectl
+      command: ["/bin/sh"]
+      args:
+        - -c
+        - "kubectl patch openstackdeployments -n openstack osh-dev --type=json -p='[{\"op\": \"replace\", \"path\": \"/spec/services/identity/keystone/values\", \"value\": {\"images\": {\"tags\": {\"keystone_api\": \"${inputs.params.keystoneImagesUrl}:${inputs.params.keystoneImagesTag}\"}}}}]'"
